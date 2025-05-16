@@ -39,10 +39,10 @@ gpt_conversation = [
 # FastAPI app
 app = FastAPI()
 
-@app.get("/twiml")
+@app.api_route("/twiml", methods=["GET", "POST"])  # Accepts Twilio POST webhook
 async def twiml():
     try:
-        # Get the next GPT response
+        # Get GPT response
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=gpt_conversation
@@ -51,10 +51,10 @@ async def twiml():
         reply = response['choices'][0]['message']['content']
         gpt_conversation.append({"role": "assistant", "content": reply})
 
-        # Generate ElevenLabs audio URL for Desiree's voice
+        # Generate ElevenLabs voice audio URL
         audio_url = generate_audio(reply)
 
-        # Return TwiML with <Play> for dynamic audio
+        # TwiML response using <Play>
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{audio_url}</Play>
@@ -68,7 +68,7 @@ async def twiml():
 
 
 def generate_audio(text):
-    """Generate audio from ElevenLabs Desiree agent"""
+    """Generate audio using ElevenLabs agent voice"""
     response = requests.get(f"{DESIREE_AGENT_URL}&text={text}")
     if response.status_code == 200:
         return response.json().get("audio_url")
@@ -83,7 +83,7 @@ def make_call(to_number: str):
         call = client.calls.create(
             to=to_number,
             from_=twilio_number,
-            url="https://ai-calling-agent-6mzv.onrender.com/twiml"  # ← FINAL Render URL here
+            url="https://ai-calling-agent-6mzv.onrender.com/twiml"  # Your live webhook URL
         )
         print(f"Call SID: {call.sid}")
         return {"message": "Call initiated", "sid": call.sid}
