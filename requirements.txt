@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+openai==0.28.0
+twilio
+requests
+gspread
+oauth2client
+python-dotenv
+boto3
+elevenlabs
