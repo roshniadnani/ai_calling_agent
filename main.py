@@ -5,15 +5,13 @@ from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
 
-# Load .env locally for dev
+# Load .env (for local testing)
 load_dotenv()
 
-# Load OpenAI API key with fallback
+# Load OpenAI key with fallback
 openai.api_key = (
     os.environ.get("OPENAI_API_KEY")
     or os.environ.get("FUNCTION_OPENAI")
-    # Optional: uncomment below to hardcode during demo (remove before sharing code)
-    # or "sk-proj-xxxxxYourKeyHerexxxxx"
 )
 
 print("✅ OpenAI API Key Loaded:", "Yes" if openai.api_key else "❌ No")
@@ -31,7 +29,7 @@ DESIREE_AGENT_URL = os.getenv("DESIREE_AGENT_URL")
 # Initialize Twilio client
 client = Client(twilio_account_sid, twilio_auth_token)
 
-# GPT conversation state
+# GPT conversation memory
 gpt_conversation = [
     {
         "role": "system",
@@ -49,19 +47,19 @@ app = FastAPI()
 @app.api_route("/twiml", methods=["GET", "POST"])
 async def twiml():
     try:
-        # GPT response
+        # Use GPT-3.5-Turbo (universal access)
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=gpt_conversation
         )
 
         reply = response['choices'][0]['message']['content']
         gpt_conversation.append({"role": "assistant", "content": reply})
 
-        # Generate ElevenLabs voice audio
+        # Generate audio using ElevenLabs
         audio_url = generate_audio(reply)
 
-        # Return TwiML <Play> response
+        # TwiML response
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{audio_url}</Play>
@@ -75,7 +73,7 @@ async def twiml():
 
 
 def generate_audio(text):
-    """Generate audio using ElevenLabs agent"""
+    """Text-to-speech using ElevenLabs agent"""
     response = requests.get(f"{DESIREE_AGENT_URL}&text={text}")
     if response.status_code == 200:
         return response.json().get("audio_url")
