@@ -8,8 +8,8 @@ import requests
 # Load environment variables from .env
 load_dotenv()
 
-# Initialize OpenAI API
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Use FUNCTION_OPENAI instead of OPENAI_API_KEY
+openai.api_key = os.getenv("FUNCTION_OPENAI")
 
 # Twilio credentials
 twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
@@ -24,7 +24,7 @@ DESIREE_AGENT_URL = os.getenv("DESIREE_AGENT_URL")
 # Initialize Twilio client
 client = Client(twilio_account_sid, twilio_auth_token)
 
-# GPT conversation state
+# GPT conversation memory
 gpt_conversation = [
     {
         "role": "system",
@@ -39,7 +39,7 @@ gpt_conversation = [
 # FastAPI app
 app = FastAPI()
 
-@app.api_route("/twiml", methods=["GET", "POST"])  # Accepts Twilio POST webhook
+@app.api_route("/twiml", methods=["GET", "POST"])
 async def twiml():
     try:
         # Get GPT response
@@ -51,10 +51,10 @@ async def twiml():
         reply = response['choices'][0]['message']['content']
         gpt_conversation.append({"role": "assistant", "content": reply})
 
-        # Generate ElevenLabs voice audio URL
+        # Generate ElevenLabs voice
         audio_url = generate_audio(reply)
 
-        # TwiML response using <Play>
+        # Twilio TwiML with <Play>
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{audio_url}</Play>
@@ -68,7 +68,7 @@ async def twiml():
 
 
 def generate_audio(text):
-    """Generate audio using ElevenLabs agent voice"""
+    """Generate voice using ElevenLabs"""
     response = requests.get(f"{DESIREE_AGENT_URL}&text={text}")
     if response.status_code == 200:
         return response.json().get("audio_url")
@@ -83,7 +83,7 @@ def make_call(to_number: str):
         call = client.calls.create(
             to=to_number,
             from_=twilio_number,
-            url="https://ai-calling-agent-6mzv.onrender.com/twiml"  # Your live webhook URL
+            url="https://ai-calling-agent-6mzv.onrender.com/twiml"  # Render webhook
         )
         print(f"Call SID: {call.sid}")
         return {"message": "Call initiated", "sid": call.sid}
