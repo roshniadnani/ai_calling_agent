@@ -5,11 +5,18 @@ from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
 
-# Load environment variables from .env
+# Load .env locally for dev
 load_dotenv()
 
-# Use FUNCTION_OPENAI instead of OPENAI_API_KEY
-openai.api_key = os.getenv("FUNCTION_OPENAI")
+# Load OpenAI API key with fallback
+openai.api_key = (
+    os.environ.get("OPENAI_API_KEY")
+    or os.environ.get("FUNCTION_OPENAI")
+    # Optional: uncomment below to hardcode during demo (remove before sharing code)
+    # or "sk-proj-xxxxxYourKeyHerexxxxx"
+)
+
+print("✅ OpenAI API Key Loaded:", "Yes" if openai.api_key else "❌ No")
 
 # Twilio credentials
 twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
@@ -24,7 +31,7 @@ DESIREE_AGENT_URL = os.getenv("DESIREE_AGENT_URL")
 # Initialize Twilio client
 client = Client(twilio_account_sid, twilio_auth_token)
 
-# GPT conversation memory
+# GPT conversation state
 gpt_conversation = [
     {
         "role": "system",
@@ -42,7 +49,7 @@ app = FastAPI()
 @app.api_route("/twiml", methods=["GET", "POST"])
 async def twiml():
     try:
-        # Get GPT response
+        # GPT response
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=gpt_conversation
@@ -51,10 +58,10 @@ async def twiml():
         reply = response['choices'][0]['message']['content']
         gpt_conversation.append({"role": "assistant", "content": reply})
 
-        # Generate ElevenLabs voice
+        # Generate ElevenLabs voice audio
         audio_url = generate_audio(reply)
 
-        # Twilio TwiML with <Play>
+        # Return TwiML <Play> response
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Play>{audio_url}</Play>
@@ -68,7 +75,7 @@ async def twiml():
 
 
 def generate_audio(text):
-    """Generate voice using ElevenLabs"""
+    """Generate audio using ElevenLabs agent"""
     response = requests.get(f"{DESIREE_AGENT_URL}&text={text}")
     if response.status_code == 200:
         return response.json().get("audio_url")
@@ -83,7 +90,7 @@ def make_call(to_number: str):
         call = client.calls.create(
             to=to_number,
             from_=twilio_number,
-            url="https://ai-calling-agent-6mzv.onrender.com/twiml"  # Render webhook
+            url="https://ai-calling-agent-6mzv.onrender.com/twiml"
         )
         print(f"Call SID: {call.sid}")
         return {"message": "Call initiated", "sid": call.sid}
