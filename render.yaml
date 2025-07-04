@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: ai-calling-agent
+    env: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
+    envVars:
+      - key: OPENAI_API_KEY
+        value: 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
+      - key: ELEVENLABS_API_KEY
+        value: sk_9952659ca29b479314f0b59b30561c35064e83c66e13670e
+      - key: ELEVENLABS_AGENT_ID
+        value: PU6B8gfYqp3DrePOTFvu
+      - key: ELEVENLABS_VOICE_ID
+        value: zWRDoH56JB9twPHdkksW
+      - key: GOOGLE_SHEET_CALL_TRACKER_ID
+        value: 1J9zd4CfRAPCQQsxfXn-VCVPTF8IWmDHe
+      - key: GOOGLE_SHEET_CALL_TRACKER_NAME
+        value: Call_Queue_Tracker
+      - key: GOOGLE_SHEET_RESPONSE_LOG_ID
+        value: 1HBm5da6WOIVy9oV9Ck65ZKNPW-NoTHP5
+      - key: GOOGLE_SHEET_RESPONSE_LOG_NAME
+        value: Survey_Responses_Log
+      - key: VONAGE_API_KEY
+        value: 4071bee6
+      - key: VONAGE_API_SECRET
+        value: 8Hl3J5qPprZUCoCG
+      - key: VONAGE_APPLICATION_ID
+        value: 0f4f9a52-9da7-4372-8117-dc04674315c7
+      - key: VONAGE_VIRTUAL_NUMBER
+        value: +15707744220
