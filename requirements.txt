@@ -11,7 +11,7 @@ websockets==12.0
 pydub==0.25.1
 
 # === Vonage Voice API ===
-vonage==3.6.9
+vonage==3.3.0
 
 # === Google Sheets Logging ===
 gspread==5.12.4
