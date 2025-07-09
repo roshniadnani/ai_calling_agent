@@ -4,3 +4,6 @@
 *.xlsx
 venv/
 __pycache__/
+private.key
+credentials.json
+render.yaml
