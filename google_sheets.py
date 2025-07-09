@@ -1,21 +1,37 @@
+import os
+import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import os
 
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+CALL_QUEUE_SHEET_ID = os.getenv("CALL_QUEUE_SHEET_ID")
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-client = gspread.authorize(creds)
+def _get_client():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_SHEETS_CREDENTIALS_PATH, scope)
+    client = gspread.authorize(creds)
+    return client
 
-# Replace with your actual sheet name
-SHEET_NAME = "AI_Calling_Responses"
-sheet = client.open(SHEET_NAME).sheet1
+def log_response(phone_number, responses):
+    client = _get_client()
+    sheet = client.open_by_key(GOOGLE_SHEET_ID).sheet1
 
-def log_response(caller_number, response_data):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    row = [timestamp, caller_number] + response_data
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    row = [timestamp, phone_number] + responses
     sheet.append_row(row)
+    print(f"📥 Logged to Google Sheet: {row}")
+
+def get_call_queue():
+    client = _get_client()
+    sheet = client.open_by_key(CALL_QUEUE_SHEET_ID).sheet1
+    data = sheet.get_all_values()
+    header, rows = data[0], data[1:]
+
+    queue = []
+    for row in rows:
+        if len(row) >= 2:
+            phone, status = row[0], row[1].lower()
+            if status not in ["done", "skip"]:
+                queue.append(phone)
+    return queue

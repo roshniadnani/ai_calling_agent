@@ -1,51 +1,51 @@
 import os
-import sys
-sys.path.append("elevenlabs-mcp")
-import json
-import backoff
-import websockets
+import base64
+import httpx
 from dotenv import load_dotenv
-from elevenlabs_mcp.elevenlabs.mcp import AgentClient  # ✅ Fixed import
 
 load_dotenv()
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
+APP_URL = os.getenv("APP_URL")
 
-class MCPStreamClient(AgentClient):
-    def __init__(self, websocket):
-        super().__init__(api_key=ELEVENLABS_API_KEY)
-        self.websocket = websocket
-        self.stability = 0.5
-        self.similarity_boost = 0.75
-        self.style = 0.1
+HEADERS = {
+    "xi-api-key": ELEVENLABS_API_KEY,
+    "Content-Type": "application/json"
+}
 
-    async def on_audio_chunk(self, chunk):
-        await self.websocket.send(chunk)
+async def stream_mcp_audio(text: str, conversation_id: str = "call1") -> str:
+    """
+    Sends the text to ElevenLabs MCP and returns the MP3 file path.
+    """
+    payload = {
+        "agent_id": ELEVENLABS_AGENT_ID,
+        "voice_id": "default",  # optional, agent voice takes priority
+        "text": text,
+        "stream": False,
+        "config": {
+            "output_format": "mp3_44100_128",
+            "latency_optimization_level": 3
+        },
+        "tools": {
+            "webhook_url": f"{APP_URL}/call_socket/{conversation_id}"
+        }
+    }
 
-    async def connect(self):
-        self.ws = await websockets.connect(f"wss://api.elevenlabs.io/v1/mcp/stream")
-
-    async def disconnect(self):
-        if hasattr(self, "ws") and self.ws.open:
-            await self.ws.close()
-
-@backoff.on_exception(backoff.expo, Exception, max_tries=3)
-async def stream_audio_mcp(text: str, websocket: websockets.WebSocketServerProtocol):
-    try:
-        client = MCPStreamClient(websocket)
-        await client.connect()
-        await client.generate(
-            voice_id=ELEVENLABS_AGENT_ID,
-            text=text,
-            model="eleven_multilingual_v2",
-            optimize_streaming_latency=True,
-            stability=client.stability,
-            similarity_boost=client.similarity_boost,
-            style=client.style
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.elevenlabs.io/v1/agents/stream",
+            json=payload,
+            headers=HEADERS
         )
-    except Exception as e:
-        print(f"❌ MCP Audio Error: {e}")
-        await websocket.send(json.dumps({"error": "Audio streaming failed"}))
-    finally:
-        await client.disconnect()
+
+    if response.status_code != 200:
+        raise Exception(f"Audio generation failed: {response.text}")
+
+    # Save audio to file
+    audio_data = response.content
+    output_path = f"static/desiree_response.mp3"
+    with open(output_path, "wb") as f:
+        f.write(audio_data)
+
+    return output_path

@@ -1,57 +1,50 @@
-from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
-from dotenv import load_dotenv
-import os
-import openai
-from elevenlabs.client import ElevenLabs
+from fastapi import FastAPI, WebSocket
+from gpt_utils import ask_gpt
+from generate_audio import stream_mcp_audio
 from google_sheets import log_response
 from script_blocks import ScriptFlow
-from generate_audio import generate_audio_for_text
-
-load_dotenv()
+from fastapi.responses import HTMLResponse
+import uuid
 
 app = FastAPI()
-script_flow = ScriptFlow()
-
-# Load API Keys
-openai.api_key = os.getenv("OPENAI_API_KEY")
-eleven = ElevenLabs(api_key=os.getenv("ELEVEN_API_KEY"))
+script = ScriptFlow()
 
 @app.get("/")
-def root():
-    return {"status": "AI Agent Live - Local Test Mode"}
+def index():
+    return HTMLResponse("<h2>AI Calling Agent is running</h2>")
 
-@app.post("/webhooks/answer")
-async def answer_call():
-    block = script_flow.get_block("greeting")
-    generate_audio_for_text(block.text)  # This will save to static/desiree_response.mp3
-    return FileResponse("static/desiree_response.mp3", media_type="audio/mpeg")
+@app.get("/call")
+async def simulate_call():
+    conversation_id = str(uuid.uuid4())
+    print(f"\n📞 Starting call simulation: {conversation_id}")
+    for block in script.blocks:
+        print(f"🤖 Desiree: {block['text']}")
+        if block.get("question"):
+            response = await ask_gpt(block["text"])
+            print(f"🗣️ User: {response}")
+            await log_response(conversation_id, block["id"], response)
+        if block.get("end_call"):
+            print("📴 Call ended.\n")
+            break
+    return {"status": "Call completed", "conversation_id": conversation_id}
 
-@app.post("/webhooks/event")
-async def handle_event(request: Request):
-    event = await request.json()
-    print("Vonage Event:", event)
-    return JSONResponse(content={"status": "event received"})
-
-@app.post("/call")
-async def start_call(request: Request, background_tasks: BackgroundTasks):
-    data = await request.json()
-    user_input = data.get("user_input")
-    block_id = data.get("block_id", "greeting")
-
-    block = script_flow.get_block(block_id)
-    next_block_id = script_flow.get_next_block_id(block_id, user_input)
-
-    if not next_block_id:
-        return {"done": True, "message": "Survey complete or call ended."}
-
-    next_block = script_flow.get_block(next_block_id)
-    audio_path = generate_audio_for_text(next_block.text)
-
-    background_tasks.add_task(log_response, data.get("caller_number"), block_id, user_input)
-
-    return {
-        "next_block": next_block.id,
-        "text": next_block.text,
-        "audio_url": f"/static/{os.path.basename(audio_path)}"
-    }
+@app.websocket("/call_socket/{conversation_id}")
+async def call_socket(websocket: WebSocket, conversation_id: str):
+    await websocket.accept()
+    print(f"\n🔗 MCP socket opened for: {conversation_id}")
+    for block in script.blocks:
+        if block.get("skip_if_answered"):
+            continue
+        await websocket.send_text(block["text"])
+        if block.get("question"):
+            user_reply = await websocket.receive_text()
+            if not user_reply.strip() and block.get("requires_response"):
+                clarification = await ask_gpt("Please rephrase or clarify that.")
+                await websocket.send_text(clarification)
+                user_reply = await websocket.receive_text()
+            await log_response(conversation_id, block["id"], user_reply)
+        if block.get("end_call"):
+            await websocket.send_text("Thank you. Goodbye!")
+            await websocket.close()
+            print(f"📴 Call ended: {conversation_id}")
+            break

@@ -2,32 +2,33 @@ services:
   - type: web
     name: ai-calling-agent
     env: python
+    region: oregon
     plan: free
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
     envVars:
-      - key: OPENAI_API_KEY
-        value: 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
-      - key: ELEVENLABS_API_KEY
-        value: sk_9952659ca29b479314f0b59b30561c35064e83c66e13670e
-      - key: ELEVENLABS_AGENT_ID
-        value: PU6B8gfYqp3DrePOTFvu
-      - key: ELEVENLABS_VOICE_ID
-        value: zWRDoH56JB9twPHdkksW
-      - key: GOOGLE_SHEET_CALL_TRACKER_ID
-        value: 1J9zd4CfRAPCQQsxfXn-VCVPTF8IWmDHe
-      - key: GOOGLE_SHEET_CALL_TRACKER_NAME
-        value: Call_Queue_Tracker
-      - key: GOOGLE_SHEET_RESPONSE_LOG_ID
-        value: 1HBm5da6WOIVy9oV9Ck65ZKNPW-NoTHP5
-      - key: GOOGLE_SHEET_RESPONSE_LOG_NAME
-        value: Survey_Responses_Log
+      - key: APP_URL
+        value: https://ai-calling-agent-cr4x.onrender.com
       - key: VONAGE_API_KEY
         value: 4071bee6
       - key: VONAGE_API_SECRET
         value: 8Hl3J5qPprZUCoCG
       - key: VONAGE_APPLICATION_ID
-        value: 0f4f9a52-9da7-4372-8117-dc04674315c7
-      - key: VONAGE_VIRTUAL_NUMBER
-        value: +15707744220
+        value: ccc620a6-75e0-43c6-b99d-7525bf1911a9
+      - key: VONAGE_PRIVATE_KEY_PATH
+        value: vonage_private.key
+      - key: ELEVENLABS_API_KEY
+        value: sk_e5b1f7b94aa91755c6c22fd996be9d41ba108479a009808a
+      - key: ELEVENLABS_AGENT_ID
+        value: PU6B8gfYqp3DrePOTFvu
+      - key: OPENAI_API_KEY
+        value: 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
+      - key: OPENAI_MODEL
+        value: gpt-4
+      - key: GOOGLE_SHEETS_CREDENTIALS_PATH
+        value: ai-calling-agent-461408-f3080ffc6b7f.json
+      - key: GOOGLE_SHEET_ID
+        value: 1HBm5da6WOIVy9oV9Ck65ZKNPW-NoTHP5
+      - key: CALL_QUEUE_SHEET_ID
+        value: 1J9zd4CfRAPCQQsxfXn-VCVPTF8IWmDHe

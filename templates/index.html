@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Calling Agent Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f9f9f9; }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Calling Agent Dashboard</h1>
+    <table>
+        <tr>
+            <th>Phone Number</th>
+            <th>Schedule</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+        {% for record in queue %}
+        <tr>
+            <td>{{ record.phone_number }}</td>
+            <td>{{ record.schedule }}</td>
+            <td>{{ record.status }}</td>
+            <td>
+                {% if record.status == "Pending" %}
+                <button onclick="triggerCall('{{ record.phone_number }}')">Call Now</button>
+                {% else %}
+                <span style="color: gray;">No Action</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <script>
+        async function triggerCall(phoneNumber) {
+            try {
+                const response = await fetch('/call', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({to_number: phoneNumber})
+                });
+
+                if (response.ok) {
+                    alert(`Call initiated for ${phoneNumber}`);
+                    location.reload();
+                } else {
+                    alert('Failed to initiate call.');
+                }
+            } catch (error) {
+                alert('Error: ' + error);
+            }
+        }
+    </script>
+</body>
+</html>
