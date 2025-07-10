@@ -1,13 +1,11 @@
 import os
 import sys
-import json
 import logging
 import asyncio
 from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, HTTPException
 from fastapi.responses import JSONResponse
-from vonage import Voice  # <-- Added this import
-from vonage import Webhook
+from vonage import Voice
 from elevenlabs_mcp import MCPClient
 from dotenv import load_dotenv
 
@@ -25,7 +23,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Initialize Vonage Voice client
+# Initialize Vonage client with Smart Numbers support
 vonage_voice = Voice(
     key=os.getenv("VONAGE_API_KEY"),
     secret=os.getenv("VONAGE_API_SECRET"),
@@ -45,10 +43,45 @@ async def vonage_webhook(request: Request):
     try:
         data = await request.json()
         logging.info(f"Vonage webhook received: {data}")
+        
+        # Handle Smart Numbers events
+        if data.get('smart_number'):
+            logging.info("Smart Numbers event detected")
+            
         return {"status": "success"}
     except Exception as e:
         logging.error(f"Webhook error: {str(e)}")
         raise HTTPException(400, detail=str(e))
+
+@app.post("/make-call")
+async def make_call(request: Request):
+    try:
+        data = await request.json()
+        ncco = [{
+            "action": "talk",
+            "text": "Connecting your call..."
+        }, {
+            "action": "connect",
+            "endpoint": [{
+                "type": "websocket",
+                "uri": f"wss://{os.getenv('APP_URL').replace('https://', '')}/ws",
+                "content-type": "audio/l16;rate=16000"
+            }]
+        }]
+        
+        call_params = {
+            "to": [{"type": "phone", "number": data['to_number']}],
+            "from": {"type": "phone", "number": os.getenv("VONAGE_PHONE_NUMBER")},
+            "ncco": ncco,
+            "smart": os.getenv("VONAGE_SMART_NUMBERS_ENABLED", "false").lower() == "true"
+        }
+        
+        response = vonage_voice.create_call(call_params)
+        return {"status": "success", "call_id": response["uuid"]}
+        
+    except Exception as e:
+        logging.error(f"Call failed: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -56,7 +89,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
-            # Process call data here
+            # Process call data
             await process_call_data(data, websocket)
     except Exception as e:
         logging.error(f"WebSocket error: {str(e)}")
@@ -64,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 async def process_call_data(data: dict, websocket: WebSocket):
-    """Process incoming call data and stream audio"""
+    """Process incoming call data"""
     try:
         if 'text' in data:
             await stream_audio(data['text'], websocket)
@@ -84,9 +117,9 @@ async def stream_audio(text: str, websocket: WebSocket):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "smart_numbers": os.getenv("VONAGE_SMART_NUMBERS_ENABLED", "false")}
 
-# Required for Gunicorn compatibility
+# For Gunicorn compatibility
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
