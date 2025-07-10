@@ -4,12 +4,11 @@ uvicorn==0.27.1
 gunicorn==21.2.0
 python-dotenv==1.0.1
 
-# Vonage (Official SDK)
-vonage==3.5.0  # Includes Smart Numbers support
+# Vonage (pure Python version)
+vonage==3.2.0
 
-# ElevenLabs
+# ElevenLabs (use HTTP API instead of MCP)
 elevenlabs==2.6.0
-elevenlabs-mcp==0.4.0
 
 # OpenAI
 openai==1.12.0
@@ -26,13 +25,9 @@ aiohttp==3.9.1
 backoff==2.2.1
 tenacity==8.2.3
 
-# Monitoring (Python 3.13 compatible)
+# Monitoring
 prometheus-client==0.20.0
 
-# Security (Alternative to python-jose)
-pyjwt==2.8.0  # JWT implementation
-cryptography==42.0.5  # Required for JWT
+# Security
+pyjwt[crypto]==2.8.0
 python-multipart==0.0.6
-
-# Pydantic
-pydantic==2.6.4

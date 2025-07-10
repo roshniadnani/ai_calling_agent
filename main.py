@@ -5,8 +5,8 @@ import asyncio
 from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, HTTPException
 from fastapi.responses import JSONResponse
-from vonage import Client as VonageClient  # Changed import
-from elevenlabs_mcp import MCPClient
+from vonage import Client as VonageClient  # Using compatible client
+from elevenlabs.client import ElevenLabs  # Using HTTP API instead of MCP
 from dotenv import load_dotenv
 
 # Configure system path
@@ -30,15 +30,14 @@ vonage_client = VonageClient(
     private_key=os.getenv("VONAGE_PRIVATE_KEY_PATH")
 )
 
-# Initialize ElevenLabs
-mcp_client = MCPClient(
-    api_key=os.getenv("ELEVENLABS_API_KEY"),
-    agent_id=os.getenv("ELEVENLABS_AGENT_ID"),
-    base_url=os.getenv("MCP_SERVER_URL", "http://localhost:5000")
+# Initialize ElevenLabs HTTP client
+el_client = ElevenLabs(
+    api_key=os.getenv("ELEVENLABS_API_KEY")
 )
 
 @app.post("/vonage-webhook")
 async def vonage_webhook(request: Request):
+    """Handle Vonage call events including Smart Numbers"""
     try:
         data = await request.json()
         logging.info(f"Webhook received: {data}")
@@ -54,6 +53,7 @@ async def vonage_webhook(request: Request):
 
 @app.post("/make-call")
 async def make_call(request: Request):
+    """Initiate outbound call with Smart Numbers support"""
     try:
         data = await request.json()
         ncco = [{
@@ -82,6 +82,7 @@ async def make_call(request: Request):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    """Handle real-time audio streaming"""
     await websocket.accept()
     try:
         while True:
@@ -94,19 +95,30 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 async def stream_audio(text: str, websocket: WebSocket):
+    """Stream audio using ElevenLabs HTTP API"""
     try:
-        async for chunk in mcp_client.stream(text):
+        # Generate and stream audio
+        audio = el_client.generate(
+            text=text,
+            voice_id=os.getenv("ELEVENLABS_VOICE_ID"),
+            model="eleven_monolingual_v2",
+            stream=True
+        )
+        for chunk in audio:
             await websocket.send_bytes(chunk)
     except Exception as e:
         logging.error(f"Audio error: {str(e)}")
+        # Fallback to static audio
         with open("static/fallback.wav", "rb") as f:
             await websocket.send_bytes(f.read())
 
 @app.get("/health")
 async def health_check():
+    """System health endpoint"""
     return {
         "status": "healthy",
-        "smart_numbers": os.getenv("VONAGE_SMART_NUMBERS_ENABLED", "false")
+        "smart_numbers": os.getenv("VONAGE_SMART_NUMBERS_ENABLED", "false"),
+        "version": "2.0.0"
     }
 
 if __name__ == "__main__":
