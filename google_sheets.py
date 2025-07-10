@@ -1,37 +1,46 @@
-import os
-import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from dotenv import load_dotenv
+import os
+import logging
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
-GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-CALL_QUEUE_SHEET_ID = os.getenv("CALL_QUEUE_SHEET_ID")
+load_dotenv()
+logging.basicConfig(filename='logs/sheets_errors.log', level=logging.ERROR)
 
-def _get_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_SHEETS_CREDENTIALS_PATH, scope)
-    client = gspread.authorize(creds)
-    return client
+class GoogleSheetsService:
+    def __init__(self):
+        scope = ["https://spreadsheets.google.com/feeds", 
+                "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH"), scope)
+        self.client = gspread.authorize(creds)
+        
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    def log_interaction(self, call_data: dict):
+        try:
+            sheet = self.client.open_by_key(os.getenv("GOOGLE_SHEET_ID")).sheet1
+            sheet.append_row([
+                call_data.get("timestamp"),
+                call_data.get("phone_number"),
+                call_data.get("question"),
+                call_data.get("response"),
+                call_data.get("status")
+            ])
+        except Exception as e:
+            logging.error(f"Failed to log interaction: {str(e)}")
+            raise
 
-def log_response(phone_number, responses):
-    client = _get_client()
-    sheet = client.open_by_key(GOOGLE_SHEET_ID).sheet1
-
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    row = [timestamp, phone_number] + responses
-    sheet.append_row(row)
-    print(f"📥 Logged to Google Sheet: {row}")
-
-def get_call_queue():
-    client = _get_client()
-    sheet = client.open_by_key(CALL_QUEUE_SHEET_ID).sheet1
-    data = sheet.get_all_values()
-    header, rows = data[0], data[1:]
-
-    queue = []
-    for row in rows:
-        if len(row) >= 2:
-            phone, status = row[0], row[1].lower()
-            if status not in ["done", "skip"]:
-                queue.append(phone)
-    return queue
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    def update_call_status(self, call_id: str, status: str):
+        try:
+            sheet = self.client.open_by_key(os.getenv("CALL_QUEUE_SHEET_ID")).sheet1
+            records = sheet.get_all_records()
+            
+            for idx, row in enumerate(records, start=2):
+                if row.get("call_id") == call_id:
+                    sheet.update_cell(idx, 5, status)  # 5th column = status
+                    break
+        except Exception as e:
+            logging.error(f"Failed to update call status: {str(e)}")
+            raise

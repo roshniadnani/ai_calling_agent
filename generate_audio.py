@@ -1,51 +1,44 @@
-import os
-import base64
-import httpx
+import asyncio
+from elevenlabs_mcp import MCPClient
 from dotenv import load_dotenv
+import os
+import logging
+from pathlib import Path
 
 load_dotenv()
+logging.basicConfig(filename='logs/audio_errors.log', level=logging.ERROR)
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-APP_URL = os.getenv("APP_URL")
-
-HEADERS = {
-    "xi-api-key": ELEVENLABS_API_KEY,
-    "Content-Type": "application/json"
-}
-
-async def stream_mcp_audio(text: str, conversation_id: str = "call1") -> str:
-    """
-    Sends the text to ElevenLabs MCP and returns the MP3 file path.
-    """
-    payload = {
-        "agent_id": ELEVENLABS_AGENT_ID,
-        "voice_id": "default",  # optional, agent voice takes priority
-        "text": text,
-        "stream": False,
-        "config": {
-            "output_format": "mp3_44100_128",
-            "latency_optimization_level": 3
-        },
-        "tools": {
-            "webhook_url": f"{APP_URL}/call_socket/{conversation_id}"
-        }
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.elevenlabs.io/v1/agents/stream",
-            json=payload,
-            headers=HEADERS
+class AudioService:
+    def __init__(self):
+        self.client = MCPClient(
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+            agent_id=os.getenv("ELEVENLABS_AGENT_ID"),
+            base_url=os.getenv("MCP_SERVER_URL", "http://localhost:5000")
         )
+        self.fallback_audio = Path("static/fallback.wav")
 
-    if response.status_code != 200:
-        raise Exception(f"Audio generation failed: {response.text}")
+    async def stream_audio(self, text: str, websocket):
+        try:
+            stream = self.client.stream(
+                text=text,
+                voice_id=os.getenv("ELEVENLABS_VOICE_ID"),
+                model="eleven_turbo_v2",
+                latency_optimization=4,
+                stream_chunk_size=2048
+            )
+            
+            async for chunk in stream:
+                await websocket.send_bytes(chunk)
+                await asyncio.sleep(0.01)  # 10ms delay between chunks
+                
+        except Exception as e:
+            logging.error(f"Audio streaming failed: {str(e)}")
+            await self.send_fallback(websocket)
 
-    # Save audio to file
-    audio_data = response.content
-    output_path = f"static/desiree_response.mp3"
-    with open(output_path, "wb") as f:
-        f.write(audio_data)
-
-    return output_path
+    async def send_fallback(self, websocket):
+        try:
+            if self.fallback_audio.exists():
+                with open(self.fallback_audio, "rb") as f:
+                    await websocket.send_bytes(f.read())
+        except Exception as e:
+            logging.error(f"Fallback audio failed: {str(e)}")
