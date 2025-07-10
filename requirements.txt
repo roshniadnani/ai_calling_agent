@@ -33,3 +33,6 @@ prometheus-client==0.20.0
 pyjwt==2.8.0  # JWT implementation
 cryptography==42.0.5  # Required for JWT
 python-multipart==0.0.6
+
+# Pydantic
+pydantic==2.6.4
